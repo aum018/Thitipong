@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <title>แยกจัดการ Devices & Readings (Firebase)</title>
+  <style>
+    body {
+      background: linear-gradient(to bottom, #6ecff6, #2e8bcc);
+      background-image: url('https://images.unsplash.com/photo-1507525428034-b723cf961d3e?ixlib=rb-4.0.3&auto=format&fit=crop&w=1600&q=80');
+      background-size: cover;
+      background-repeat: no-repeat;
+      background-attachment: fixed;
+      font-family: Arial, sans-serif;
+      color: #fff;
+    }
+    h2 {
+      text-align: center;
+      text-shadow: 2px 2px 4px #000;
+    }
+    table {
+      border-collapse: collapse;
+      width: 90%;
+      margin: 20px auto;
+      background: rgba(34, 139, 34, 0.85);
+      color: #fff;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 0 15px rgba(0,0,0,0.3);
+    }
+    th, td {
+      border: 1px solid #2e8b57;
+      padding: 10px 14px;
+      text-align: left;
+    }
+    th {
+      background-color: rgba(0, 100, 0, 0.8);
+    }
+    caption {
+      font-weight: bold;
+      margin: 10px;
+      font-size: 1.3em;
+      text-shadow: 1px 1px 2px #000;
+    }
+    input {
+      padding: 6px 8px;
+      border: none;
+      border-radius: 4px;
+    }
+    button {
+      background: #228b22;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      padding: 6px 12px;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #2e8b57;
+    }
+    td[contenteditable="true"] {
+      background-color: rgba(255,255,255,0.2);
+    }
+  </style>
+</head>
+<body>
+
+<h2>🌊 แยกจัดการ Devices & Readings (Firebase) 🌳</h2>
+
+<!-- Devices Table -->
+<table id="deviceTable">
+  <caption>📋 Device Table</caption>
+  <thead>
+    <tr>
+      <th>Device ID</th>
+      <th>Name</th>
+      <th>Location</th>
+      <th>MAC</th>
+      <th>Start Date</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+  <tfoot>
+    <tr>
+      <td><input type="text" id="newDeviceId" placeholder="Device ID"></td>
+      <td><input type="text" id="newDeviceName" placeholder="Name"></td>
+      <td><input type="text" id="newDeviceLocation" placeholder="Location"></td>
+      <td><input type="text" id="newDeviceMac" placeholder="MAC"></td>
+      <td><input type="date" id="newDeviceStartDate"></td>
+      <td><button onclick="addDevice()">เพิ่ม</button></td>
+    </tr>
+  </tfoot>
+</table>
+
+<!-- Readings Table -->
+<table id="readingTable">
+  <caption>🌡️ Readings Table</caption>
+  <thead>
+    <tr>
+      <th>Device ID</th>
+      <th>Temperature</th>
+      <th>Humidity</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+  <tfoot>
+    <tr>
+      <td><input type="text" id="newReadingDeviceId" placeholder="Device ID"></td>
+      <td><input type="number" id="newTemperature" placeholder="Temperature" step="0.1"></td>
+      <td><input type="number" id="newHumidity" placeholder="Humidity" step="0.1"></td>
+      <td><button onclick="addReading()">เพิ่ม</button></td>
+    </tr>
+  </tfoot>
+</table>
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+
+<script>
+  // ✅ Firebase config
+  const firebaseConfig = {
+    apiKey: "AIzaSyC9ocYSYVwpNrPSn4iF_1ubG_dKMNX1lVY",
+    authDomain: "myiot-83a16.firebaseapp.com",
+    projectId: "myiot-83a16",
+    storageBucket: "myiot-83a16.appspot.com",
+    messagingSenderId: "281622030491",
+    appId: "1:281622030491:web:143b70cf5b30c551d1be3e",
+    measurementId: "G-ZBYMTDF62S"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
+
+  // ✅ Seed initial data ถ้ายังไม่มี
+  async function seedInitialData() {
+    const deviceRef = db.collection("devices").doc("device001");
+    const readingRef = db.collection("readings").doc("device001");
+
+    const deviceSnap = await deviceRef.get();
+    const readingSnap = await readingRef.get();
+
+    if (!deviceSnap.exists) {
+      await deviceRef.set({
+        name: "ห้องวิทย์",
+        location: "ชั้น 2 อาคารวิทยาศาสตร์",
+        mac: "AA:BB:CC:DD:EE:FF",
+        start_date: "2025-07-08"
+      });
+      console.log("✅ สร้าง devices เรียบร้อย");
+    }
+
+    if (!readingSnap.exists) {
+      await readingRef.set({
+        temperature: 30.5,
+        humidity: 70.1
+      });
+      console.log("✅ สร้าง readings เรียบร้อย");
+    }
+  }
+
+  // === Devices CRUD ===
+  async function showDevices() {
+    const tbody = document.querySelector("#deviceTable tbody");
+    tbody.innerHTML = "";
+    const snapshot = await db.collection("devices").get();
+    snapshot.forEach(doc => {
+      const id = doc.id;
+      const d = doc.data();
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${id}</td>
+        <td contenteditable="true" onblur="editDevice('${id}', 'name', this.innerText)">${d.name}</td>
+        <td contenteditable="true" onblur="editDevice('${id}', 'location', this.innerText)">${d.location}</td>
+        <td contenteditable="true" onblur="editDevice('${id}', 'mac', this.innerText)">${d.mac}</td>
+        <td contenteditable="true" onblur="editDevice('${id}', 'start_date', this.innerText)">${d.start_date}</td>
+        <td><button onclick="deleteDevice('${id}')">ลบ</button></td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  async function addDevice() {
+    const id = document.getElementById("newDeviceId").value.trim();
+    if (!id) { alert("กรุณาใส่ Device ID"); return; }
+    const doc = await db.collection("devices").doc(id).get();
+    if (doc.exists) { alert("ID นี้มีอยู่แล้ว"); return; }
+    const name = document.getElementById("newDeviceName").value.trim();
+    const location = document.getElementById("newDeviceLocation").value.trim();
+    const mac = document.getElementById("newDeviceMac").value.trim();
+    const start_date = document.getElementById("newDeviceStartDate").value;
+    await db.collection("devices").doc(id).set({ name, location, mac, start_date });
+    clearDeviceForm();
+    showDevices();
+  }
+
+  async function editDevice(id, field, value) {
+    await db.collection("devices").doc(id).update({ [field]: value.trim() });
+  }
+
+  async function deleteDevice(id) {
+    if (confirm(`ลบ Device '${id}' ใช่หรือไม่?`)) {
+      await db.collection("devices").doc(id).delete();
+      showDevices();
+    }
+  }
+
+  function clearDeviceForm() {
+    document.getElementById("newDeviceId").value = "";
+    document.getElementById("newDeviceName").value = "";
+    document.getElementById("newDeviceLocation").value = "";
+    document.getElementById("newDeviceMac").value = "";
+    document.getElementById("newDeviceStartDate").value = "";
+  }
+
+  // === Readings CRUD ===
+  async function showReadings() {
+    const tbody = document.querySelector("#readingTable tbody");
+    tbody.innerHTML = "";
+    const snapshot = await db.collection("readings").get();
+    snapshot.forEach(doc => {
+      const id = doc.id;
+      const r = doc.data();
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${id}</td>
+        <td contenteditable="true" onblur="editReading('${id}', 'temperature', this.innerText)">${r.temperature}</td>
+        <td contenteditable="true" onblur="editReading('${id}', 'humidity', this.innerText)">${r.humidity}</td>
+        <td><button onclick="deleteReading('${id}')">ลบ</button></td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  async function addReading() {
+    const id = document.getElementById("newReadingDeviceId").value.trim();
+    if (!id) { alert("ใส่ Device ID ด้วย"); return; }
+    const temp = parseFloat(document.getElementById("newTemperature").value);
+    const hum = parseFloat(document.getElementById("newHumidity").value);
+    if (isNaN(temp) || isNaN(hum)) { alert("กรุณาใส่ตัวเลขให้ถูกต้อง"); return; }
+    await db.collection("readings").doc(id).set({ temperature: temp, humidity: hum });
+    clearReadingForm();
+    showReadings();
+  }
+
+  async function editReading(id, field, value) {
+    let val = parseFloat(value.trim());
+    if (isNaN(val)) { alert("กรุณาใส่ตัวเลข"); showReadings(); return; }
+    await db.collection("readings").doc(id).update({ [field]: val });
+  }
+
+  async function deleteReading(id) {
+    if (confirm(`ลบ Readings ของ '${id}' ใช่หรือไม่?`)) {
+      await db.collection("readings").doc(id).delete();
+      showReadings();
+    }
+  }
+
+  function clearReadingForm() {
+    document.getElementById("newReadingDeviceId").value = "";
+    document.getElementById("newTemperature").value = "";
+    document.getElementById("newHumidity").value = "";
+  }
+
+  // ✅ ทำ seed แล้วโชว์ตาราง
+  seedInitialData().then(() => {
+    showDevices();
+    showReadings();
+  });
+</script>
+
+</body>
+</html>
